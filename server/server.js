@@ -4,7 +4,12 @@ const http = require('http');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const { Server }  = require('socket.io');
-const SpotifyWebApi = require('spotify-web-api-node');
+const axios = require('axios');
+const qs = require('qs')
+
+const REDIRECT_URI = process.env.REDIRECT_URI;
+const CLIENT_ID = process.env.CLIENT_ID;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
 
 const app = express();
 app.use(cors());
@@ -23,45 +28,55 @@ const io = new Server(server, {
 app.post('/login', (req, res) => {
     const code = req.body.code;
 
-    const spotifyApi = new SpotifyWebApi({
-        redirectUri: process.env.REDIRECT_URI,
-        clientId: process.env.CLIENT_ID,
-        clientSecret: process.env.CLIENT_SECRET
-    });
+    console.log("Login Endpoint Reached");
 
-    spotifyApi
-        .authorizationCodeGrant(code)
-        .then((data) => {
-            res.json({
-                accessToken: data.body.access_token,
-                refreshToken: data.body.refresh_token,
-                expiresIn: data.body.expires_in
-            });
-        }).catch((err) => {
-            res.sendStatus(400);
+    axios.post('https://accounts.spotify.com/api/token', qs.stringify({
+        code: code,
+        redirect_uri: REDIRECT_URI,
+        grant_type: 'authorization_code'
+    }),{
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Authorization: 'Basic ' +
+                Buffer.from(`${CLIENT_ID.trim()}:${CLIENT_SECRET.trim()}`)
+                    .toString('base64')
+                    .trim(),
+        }
+    }).then((data) => {
+        res.json({
+            accessToken: data.data.access_token,
+            refreshToken: data.data.refresh_token,
+            expiresIn: data.data.expires_in
         });
+    }).catch((err) => {
+        //console.log(err);
+        res.sendStatus(400);
+    });
 });
+
 app.post('/refresh', (req, res) => {
     const refreshToken = req.body.refreshToken;
 
-    const spotifyApi = new SpotifyWebApi({
-        redirectUri: process.env.REDIRECT_URI,
-        clientId: process.env.CLIENT_ID,
-        clientSecret: process.env.CLIENT_SECRET,
-        refreshToken
+    axios.post('https://accounts.spotify.com/api/token', qs.stringify({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken
+    }),{
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Authorization: 'Basic ' +
+                Buffer.from(`${CLIENT_ID.trim()}:${CLIENT_SECRET.trim()}`)
+                    .toString('base64')
+                    .trim(),
+        }
+    }).then((data) => {
+        res.json({
+            accessToken: data.data.access_token,
+            expiresIn: data.data.expires_in
+        });
+    }).catch((err) => {
+        //console.log(err);
+        res.sendStatus(400);
     });
-
-    spotifyApi
-        .refreshAccessToken()
-        .then(data => {
-            res.json({
-                accessToken: data.body.access_token,
-                expiresIn: data.body.expires_in,
-            })
-        })
-        .catch(() => {
-            res.sendStatus(400)
-        })
 })
 
 
@@ -77,5 +92,5 @@ io.on('connection', (socket) => {
 
 // Endpoint
 server.listen(3001, () =>{
-    console.log('Server listening on ', process.env.REDIRECT_URI);
+    console.log('Server running...');
 });
