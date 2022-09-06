@@ -24,11 +24,16 @@ const io = new Server(server, {
     }
 });
 
+const rooms = [];
+
+// Room API
+app.get('/rooms', (req, res) => {
+    res.json(rooms);
+})
+
 // Authentication
 app.post('/login', (req, res) => {
     const code = req.body.code;
-
-    console.log("Login Endpoint Reached");
 
     axios.post('https://accounts.spotify.com/api/token', qs.stringify({
         code: code,
@@ -43,13 +48,14 @@ app.post('/login', (req, res) => {
                     .trim(),
         }
     }).then((data) => {
+        console.log(data.data);
+
         res.json({
             accessToken: data.data.access_token,
             refreshToken: data.data.refresh_token,
             expiresIn: data.data.expires_in
         });
     }).catch((err) => {
-        //console.log(err);
         res.sendStatus(400);
     });
 });
@@ -74,15 +80,41 @@ app.post('/refresh', (req, res) => {
             expiresIn: data.data.expires_in
         });
     }).catch((err) => {
-        //console.log(err);
         res.sendStatus(400);
     });
 })
 
-
 // Websockets
 io.on('connection', (socket) => {
     console.log('User connected - ', socket.id);
+
+    // Rooms
+    socket.on('create_room', (data) => {
+        let roomId = createNewRoom();
+        removeUserFromExistingRooms(data.user.id);
+
+        const room = rooms.find(r => r.id === roomId);
+        room.members.push(data.user);
+
+        socket.emit('room_joined',  { room: room });
+        socket.join(roomId);
+    });
+
+    socket.on('join_room', (data) => {
+        if(data.room === '') {
+            socket.emit('room_error', { error: 'room_argument_invalid', data: data.room }); 
+        } else if(!rooms.find(r => r.id === parseInt(data.room))) {
+            socket.emit('room_error', { error: 'room_not_found', data: data.room }); 
+        } else {
+            removeUserFromExistingRooms(data.user.id);
+            const room = rooms.find(r => r.id === parseInt(data.room));
+            
+            room.members.push(data.user)
+
+            socket.emit('room_joined',  { room: room });
+            socket.join(data.room);
+        }
+    })
 
     socket.on('disconnect', () => {
         console.log('User disconnected - ', socket.id);
@@ -94,3 +126,30 @@ io.on('connection', (socket) => {
 server.listen(3001, () =>{
     console.log('Server running...');
 });
+
+
+// Room Management
+function createNewRoom() {
+    let id;
+    do {
+        id = Math.floor((Math.random() * (99999999-10000000)) + 10000000);
+    } while(rooms.find(r => r.id === id))
+    
+    const room = { createdAt: new Date().getTime(), id: id, members: [] };
+    rooms.push(room);
+
+    return room.id;
+}
+
+function removeUserFromExistingRooms(userId) {
+    const roomIndex = rooms.findIndex(r => r.members.some(m => m.id === userId));
+    if(roomIndex >= 0) {
+        const memberIndex = rooms[roomIndex].members.findIndex(m => m.id === userId);
+        
+        if(memberIndex >= 0)
+            rooms[roomIndex].members.splice(memberIndex, 1);
+
+        if(rooms[roomIndex].members.length === 0)
+            rooms.splice(roomIndex, 1);
+    }
+}
