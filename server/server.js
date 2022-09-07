@@ -88,7 +88,7 @@ app.post('/refresh', (req, res) => {
 io.on('connection', (socket) => {
     console.log('User connected - ', socket.id);
 
-    // Rooms
+    // Rooms || Outside
     socket.on('create_room', (data) => {
         let roomId = createNewRoom();
         removeUserFromExistingRooms(data.user.id);
@@ -96,7 +96,7 @@ io.on('connection', (socket) => {
         const room = rooms.find(r => r.id === roomId);
         room.members.push(data.user);
 
-        socket.emit('room_joined',  { room: room });
+        socket.emit('room_joined',  { room: room.id });
         socket.join(roomId);
     });
 
@@ -111,9 +111,27 @@ io.on('connection', (socket) => {
             
             room.members.push(data.user)
 
-            socket.emit('room_joined',  { room: room });
-            socket.join(data.room);
+            socket.emit('room_joined',  { room: room.id });
+            socket.join(parseInt(data.room));
         }
+    })
+
+    // Rooms || Inside
+    socket.on('user_join_room', (data) => {
+        io.to(data).emit('user_joined_room');
+    })
+
+    socket.on('room_synchronize', (data) => {
+        const target = rooms.find(r => r.id === parseInt(data));
+        socket.emit('room_data', {
+            roomId: target.id,
+            members: target.members
+        })
+    });
+
+    socket.on('user_leave_room', (data) => {
+        io.to(data.room).emit('user_left_room');
+        removeUserFromExistingRooms(data.user.id);
     })
 
     socket.on('disconnect', () => {
