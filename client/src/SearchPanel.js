@@ -2,16 +2,14 @@ import React, { useEffect, useState, useCallback } from 'react'
 import axios from 'axios';
 
 import { Form } from 'react-bootstrap'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faBroadcastTower } from '@fortawesome/free-solid-svg-icons';
- 
+
+import SearchResult from './SearchResult'
+
 export default function SearchPanel({ socket, token, room }) {
   const [search, setSearch]  = useState('');
   const [searchResults, setSearchResults] = useState([]);
 
-  const handleChange = (text) => {
-    console.log('Sending Search request to API with query : ', text);
-    
+  const handleChange = (text) => {    
     let url = new URL('https://api.spotify.com/v1/search?');
     url.searchParams.set('type', 'track');
     url.searchParams.set('limit', 10);
@@ -23,7 +21,6 @@ export default function SearchPanel({ socket, token, room }) {
         'Content-Type': 'application/json',
       }
     }).then((data) => {
-      console.log(data);
       setSearchResults(
         data.data.tracks.items.map(track => {
           const smallestAlbumImage = track.album.images.reduce(
@@ -69,25 +66,16 @@ export default function SearchPanel({ socket, token, room }) {
     debouncedSearch(search);
   }, [search]);
 
+  const addTrackToQueue = (track) =>  {
+      socket.emit('add_track_to_queue',  { track: track, room: room })
+  }
 
   return (
     <div className='d-flex flex-column p-2 flex-grow-1 overflow-hidden'>
         <Form.Control className='mb-4' type='search' placeholder='Search Song/Artist' value={search} onChange={e => setSearch(e.target.value)} />
         <div className='d-flex flex-column p-2 flex-shrink-1' style={{ 'overflow-y':  'auto'}}>
           {searchResults.map(track => (
-            <div className='d-flex align-items-center mb-3 p-2 rounded search-result' style={{ background: '#ebebeb'}}>
-              <img className='rounded' src={track.albumUrl} style={{ height: "64px", width: "64px" }} />
-              <div className='flex-grow-1 ps-3'>
-                <div className='col-11 text-truncate' >{track.title}</div>
-                <div className="col-11 text-truncate text-muted">{track.artists.join(', ')}</div>
-              </div>
-              <div className="col-1 d-flex align-items-center justify-content-center">
-                <div>{track.duration}</div>
-              </div>
-              <div className='col-1 d-flex align-items-center justify-content-center'>
-                <button class='btn btn-lg btn-primary'><FontAwesomeIcon icon={ faBroadcastTower } /></button>
-              </div>
-            </div>
+            <SearchResult track={track} key={track.uri} queueAdd={addTrackToQueue} />
           ))}
         </div>
     </div>

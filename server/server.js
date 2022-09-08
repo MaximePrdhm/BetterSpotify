@@ -48,8 +48,6 @@ app.post('/login', (req, res) => {
                     .trim(),
         }
     }).then((data) => {
-        console.log(data.data);
-
         res.json({
             accessToken: data.data.access_token,
             refreshToken: data.data.refresh_token,
@@ -94,7 +92,7 @@ io.on('connection', (socket) => {
         removeUserFromExistingRooms(data.user.id);
 
         const room = rooms.find(r => r.id === roomId);
-        room.members.push(data.user);
+        room.members.push({ id: data.user.id, name: data.user.display_name, avatar: data.user.images[0].url || '' });
 
         socket.emit('room_joined',  { room: room.id });
         socket.join(roomId);
@@ -109,7 +107,7 @@ io.on('connection', (socket) => {
             removeUserFromExistingRooms(data.user.id);
             const room = rooms.find(r => r.id === parseInt(data.room));
             
-            room.members.push(data.user)
+            room.members.push({ id: data.user.id, name: data.user.display_name, avatar: data.user.images[0].url || '' })
 
             socket.emit('room_joined',  { room: room.id });
             socket.join(parseInt(data.room));
@@ -118,21 +116,51 @@ io.on('connection', (socket) => {
 
     // Rooms || Inside
     socket.on('user_join_room', (data) => {
-        io.to(data).emit('user_joined_room');
-    })
+        const target = rooms.find(r => r.id === parseInt(data.room));
 
-    socket.on('room_synchronize', (data) => {
-        const target = rooms.find(r => r.id === parseInt(data));
-        socket.emit('room_data', {
-            roomId: target.id,
-            members: target.members
-        })
-    });
+        io.to(data.room).emit('user_joined_room', { room: data.room, users: target.members, userJoining: target.members.find(m => m.id === data.user.id), queue: target.queue } );
+    })
 
     socket.on('user_leave_room', (data) => {
-        io.to(data.room).emit('user_left_room');
+        const target = rooms.find(r => r.id === parseInt(data.room));
+        const user = target.members.find(m => m.id === data.user.id);
+
         removeUserFromExistingRooms(data.user.id);
+
+        io.to(data.room).emit('user_left_room', { room: data.room, users: target.members, userLeaving: user });
     })
+
+    socket.on('add_track_to_queue', (data) => {
+        const target = rooms.find(r => r.id === parseInt(data.room));
+        target.queue.push(data.track);
+        
+        io.to(data.room).emit('track_added_to_queue', { room: data.room, queue: target.queue, trackAdded: data.track });
+    })
+
+    socket.on('queue_reset_request', (data) => {
+        const target = rooms.find(r => r.id === parseInt(data.room));
+        target.queue = [];
+        
+        io.to(data.room).emit('queue_reset', { room: data.room, queue: target.queue });
+    })
+
+    socket.on('queue_shuffle_request', (data) => {
+        const target = rooms.find(r => r.id === parseInt(data.room));
+        
+        const queue = target.queue;
+        const shuffled = queue.sort((a, b) => 0.5 - Math.random());
+        target.queue = shuffled;
+        
+        io.to(data.room).emit('queue_shuffled', { room: data.room, queue: target.queue });
+    })
+
+    socket.on('queue_delete_request', (data) => {
+        const target = rooms.find(r => r.id === parseInt(data.room));
+        let newQueue = target.queue.filter(t => data.tracks.findIndex(track => track === t.uri) === -1);
+        target.queue = newQueue;
+
+        io.to(data.room).emit('queue_tracks_deleted', { room: data.room, queue: target.queue });
+    });
 
     socket.on('disconnect', () => {
         console.log('User disconnected - ', socket.id);
@@ -153,7 +181,7 @@ function createNewRoom() {
         id = Math.floor((Math.random() * (99999999-10000000)) + 10000000);
     } while(rooms.find(r => r.id === id))
     
-    const room = { createdAt: new Date().getTime(), id: id, members: [] };
+    const room = { createdAt: new Date().getTime(), id: id, members: [], queue: [] };
     rooms.push(room);
 
     return room.id;

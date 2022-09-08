@@ -8,26 +8,27 @@ export default function RoomDetails({socket, user, room, token}) {
     const [users, setUsers] = useState([]);
 
     useEffect(() => {
-        socket.emit('user_join_room', room);
-    }, []);
+        socket.emit('user_join_room', { room, user });
+    }, [room]);
+
+    useEffect(() => {
+        socket.on('user_joined_room', (data) => {
+            setUsers((data.users.length > 1) ? [...data.users] : [...users, data.userJoining]);
+        });
+    
+        socket.on('user_left_room', (data) => {
+            let index = data.users.findIndex(u => u.id === data.userLeaving.id);
+            let users = data.users;
+            if(index >= 0) users.slice(index, 1);
+            
+            setUsers([...users]);
+        });
+    }, [socket]);
 
     function handleSignOut() {
         socket.emit('user_leave_room', { room, user });
         window.location  = "/"
     }
-
-    socket.on('user_joined_room', () => {
-        socket.emit('room_synchronize', room);
-    });
-
-    socket.on('user_left_room', () => {
-        socket.emit('room_synchronize', room);
-    })
-    
-    // A Remonter dans le component parent
-    socket.on('room_data', (data) => { 
-        setUsers(data.members);
-    })
 
     return (
         <div className='col-3 bg-secondary d-flex flex-column overflow-hidden'>
@@ -39,16 +40,18 @@ export default function RoomDetails({socket, user, room, token}) {
 
             <h3 className='bg-dark text-info p-3 m-0 my-4'><FontAwesomeIcon className='me-1' icon={ faPeopleGroup } /> Members</h3>
             <div className='d-flex flex-wrap col-11 mx-auto flex-shrink-1' style={{ 'overflow-y':  'auto'}}>
-                {users.map(m => {
-                    return <div key={m.id} className='col-12 col-lg-6 pe-0 pe-lg-3 pb-3'>
-                        <div className="card col-12">
-                            <div className='col-12'>
-                                <img src={m.images[0].url} alt="User avatar"  className='d-block rounded rounded-circle' style={{ width: "100px", height: "100px", objectFit: "cover", margin: "8px auto"}}/>
+                {
+                    users.map(m => {
+                        return <div key={m.id} className='col-12 col-lg-6 pe-0 pe-lg-3 pb-3'>
+                            <div className="card col-12">
+                                <div className='col-12'>
+                                    <img src={m.avatar} alt="User avatar"  className='d-block rounded rounded-circle' style={{ width: "100px", height: "100px", objectFit: "cover", margin: "8px auto"}}/>
+                                </div>
+                                <h5 className="card-title text-center text-truncate">{m.name}</h5>
                             </div>
-                            <h5 className="card-title text-center text-truncate">{m.display_name}</h5>
                         </div>
-                    </div>
-                })}
+                    })
+                }
             </div>
             
         </div>
