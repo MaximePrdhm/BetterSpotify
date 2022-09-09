@@ -156,7 +156,7 @@ io.on('connection', (socket) => {
 
     socket.on('queue_delete_request', (data) => {
         const target = rooms.find(r => r.id === parseInt(data.room));
-        let newQueue = target.queue.filter(t => data.tracks.findIndex(track => track === t.uri) === -1);
+        let newQueue = target.queue.filter(t => data.tracks.findIndex(track => track === t.uuid) === -1);
         target.queue = newQueue;
 
         io.to(data.room).emit('queue_tracks_deleted', { room: data.room, queue: target.queue });

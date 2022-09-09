@@ -60,6 +60,7 @@ export default function QueuePanel({ socket, room, user }) {
 
     function handleDelete() {
         socket.emit('queue_delete_request', { room, user, tracks: selectedTracks });
+        
         setSelectedTracks([]);
     }
 
@@ -80,7 +81,7 @@ export default function QueuePanel({ socket, room, user }) {
             <div className='d-flex flex-wrap col-11 mx-auto flex-shrink-1' style={{ 'overflow-y':  'auto'}} >
                 {
                     queuedTracks.map(t => {
-                        return <QueueTrack track={t} key={t.uri} updateTrackSelection={handleTrackSelectionUpdate} />
+                        return <QueueTrack track={t} key={t.uuid} updateTrackSelection={handleTrackSelectionUpdate} />
                     })
                 }
             </div>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import axios from 'axios';
+import { v4 as uuidv4 } from 'uuid';
 
 import { Form } from 'react-bootstrap'
 
@@ -12,7 +13,7 @@ export default function SearchPanel({ socket, token, room }) {
   const handleChange = (text) => {    
     let url = new URL('https://api.spotify.com/v1/search?');
     url.searchParams.set('type', 'track');
-    url.searchParams.set('limit', 10);
+    url.searchParams.set('limit', 15);
     url.searchParams.set('q', text.trim());
     
     axios.get(url.toString(), {
@@ -67,7 +68,7 @@ export default function SearchPanel({ socket, token, room }) {
   }, [search]);
 
   const addTrackToQueue = (track) =>  {
-      socket.emit('add_track_to_queue',  { track: track, room: room })
+      socket.emit('add_track_to_queue',  { track: {...track, uuid: uuidv4().toString()}, room: room })
   }
 
   return (
